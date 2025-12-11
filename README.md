@@ -956,5 +956,3 @@ This project is licensed under the GNU General Public License v2.0 - see the [LI
 If you find this project useful, please give it a star! ⭐
 
 ---
-
-**Built with ❤️ by the Security Community, for the Security Community**
