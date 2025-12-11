@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # Snort3 IPS
+  snort3:
+    image: snort3/snort3:latest
+    container_name: snort3-ips
+    networks:
+      - ai-ops-network
+    volumes:
+      - ./snort3-plugins/event_exporter/build:/plugins
+      - ./config/snort.lua:/etc/snort/snort.lua:ro
+      - ./pcaps:/pcaps:ro
+    environment:
+      - SNORT_PLUGIN_PATH=/plugins
+    command: >
+      snort --plugin-path /plugins
+            -c /etc/snort/snort.lua
+            -r /pcaps/test.pcap
+            -A alert_fast
+    depends_on:
+      - zeromq-broker
+
+  # ZeroMQ Message Broker
+  zeromq-broker:
+    image: eclipse-mosquitto:latest
+    container_name: zeromq-broker
+    networks:
+      - ai-ops-network
+    ports:
+      - "5555:5555"
+
+  # AI-Ops Engine
+  ai-ops-engine:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: snort3-ai-ops
+    networks:
+      - ai-ops-network
+    ports:
+      - "8000:8000"  # API
+      - "8080:8080"  # Dashboard
+      - "9090:9090"  # Prometheus metrics
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./reports:/app/reports
+    environment:
+      - SNORT3_AIOPS_CONFIG=/app/config/config.yaml
+      - PYTHONUNBUFFERED=1
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
+      - OTX_API_KEY=${OTX_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - zeromq-broker
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ai-ops-redis
+    networks:
+      - ai-ops-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-ops-postgres
+    networks:
+      - ai-ops-network
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=aiops
+      - POSTGRES_PASSWORD=aiops_password
+      - POSTGRES_DB=snort3_aiops
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-ops-prometheus
+    networks:
+      - ai-ops-network
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+
+  # Grafana (Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-ops-grafana
+    networks:
+      - ai-ops-network
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  ai-ops-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:

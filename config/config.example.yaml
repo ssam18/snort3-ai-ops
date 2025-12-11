@@ -1,0 +1,280 @@
+# Event Stream Configuration
+event_stream:
+  type: zeromq
+  endpoint: tcp://127.0.0.1:5555
+  buffer_size: 10000
+  timeout: 5000
+
+# Snort3 Configuration
+snort3:
+  control_socket: /var/run/snort/snort.sock
+  plugin_path: /usr/local/snort/lib/snort/plugins
+  config_path: /etc/snort/snort.lua
+
+# Agent Configuration
+agents:
+  # Threat Intelligence Agent
+  threat_intelligence:
+    enabled: true
+    update_interval: 3600  # seconds
+    cache_ttl: 86400  # 24 hours
+    api_keys:
+      virustotal: ${VIRUSTOTAL_API_KEY}
+      abuseipdb: ${ABUSEIPDB_API_KEY}
+      alienvault_otx: ${OTX_API_KEY}
+      shodan: ${SHODAN_API_KEY}
+    feeds:
+      - type: virustotal
+        priority: high
+      - type: abuseipdb
+        priority: high
+      - type: alienvault_otx
+        priority: medium
+      - type: emergingthreats
+        priority: medium
+    confidence_threshold: 0.7
+  
+  # Behavioral Analysis Agent
+  behavioral_analysis:
+    enabled: true
+    ml_model_path: models/anomaly_detector.pkl
+    learning_mode: online  # online or batch
+    anomaly_threshold: 0.85
+    baseline_window: 7  # days
+    features:
+      - flow_duration
+      - bytes_transferred
+      - packet_rate
+      - protocol_distribution
+      - port_usage
+    protocols:
+      - tcp
+      - udp
+      - icmp
+      - http
+      - dns
+  
+  # Response Orchestrator Agent
+  response:
+    enabled: true
+    auto_response: false  # Set to true for automatic actions
+    response_delay: 0  # seconds, delay before executing
+    max_concurrent_actions: 10
+    severity_thresholds:
+      critical: 90
+      high: 75
+      medium: 50
+      low: 25
+    actions:
+      block_ip:
+        enabled: true
+        default_duration: 3600  # 1 hour
+        max_duration: 86400  # 24 hours
+      create_ticket:
+        enabled: true
+        auto_assign: true
+      notify_admin:
+        enabled: true
+        methods:
+          - email
+          - slack
+      update_firewall:
+        enabled: false  # Requires firewall integration
+  
+  # Rule Optimization Agent
+  rule_optimization:
+    enabled: true
+    analysis_window: 30  # days
+    min_rule_hits: 10  # minimum hits to consider
+    false_positive_threshold: 0.3
+    effectiveness_threshold: 0.6
+    auto_tune: false  # Set to true for automatic tuning
+    review_interval: 604800  # 7 days
+  
+  # Report Generation Agent
+  report_generation:
+    enabled: true
+    output_dir: reports/
+    formats:
+      - pdf
+      - html
+      - json
+    templates_dir: config/report_templates/
+    schedules:
+      daily_summary:
+        frequency: daily
+        time: "08:00"
+        recipients:
+          - soc@example.com
+      weekly_executive:
+        frequency: weekly
+        day: monday
+        time: "09:00"
+        recipients:
+          - ciso@example.com
+
+# External Integrations
+integrations:
+  # SIEM Integration
+  siem:
+    enabled: false
+    type: splunk  # splunk, elastic, qradar, sentinel
+    endpoint: https://splunk.example.com:8088
+    token: ${SIEM_HEC_TOKEN}
+    index: security
+    source: snort3-ai-ops
+  
+  # Firewall Integration
+  firewall:
+    enabled: false
+    type: palo_alto  # palo_alto, fortinet, cisco_asa
+    api_endpoint: https://firewall.example.com/api
+    api_key: ${FIREWALL_API_KEY}
+    verify_ssl: true
+  
+  # Ticketing System
+  ticketing:
+    enabled: false
+    type: jira  # jira, servicenow, github
+    endpoint: https://jira.example.com
+    api_token: ${JIRA_API_TOKEN}
+    project: SEC
+    default_assignee: soc-team
+  
+  # Communication
+  slack:
+    enabled: false
+    webhook_url: ${SLACK_WEBHOOK_URL}
+    channel: "#security-alerts"
+    mention_on_critical: true
+    mentions:
+      - "@security-team"
+  
+  email:
+    enabled: false
+    smtp_server: smtp.example.com
+    smtp_port: 587
+    use_tls: true
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+    from_address: snort3-ai-ops@example.com
+
+# Machine Learning Configuration
+machine_learning:
+  backend: pytorch  # pytorch, tensorflow, sklearn
+  device: auto  # auto, cpu, cuda
+  batch_size: 32
+  model_update_frequency: 86400  # 24 hours
+  training_data_retention: 90  # days
+  
+  # Anomaly Detection
+  anomaly_detection:
+    algorithm: isolation_forest
+    contamination: 0.1
+    n_estimators: 100
+  
+  # Classification
+  classification:
+    algorithm: random_forest
+    n_estimators: 200
+    max_depth: 15
+
+# Database Configuration
+database:
+  type: sqlite  # sqlite, postgresql, mysql
+  path: data/snort3_aiops.db
+  # For PostgreSQL/MySQL:
+  # host: localhost
+  # port: 5432
+  # database: snort3_aiops
+  # username: ${DB_USERNAME}
+  # password: ${DB_PASSWORD}
+  pool_size: 10
+  max_overflow: 20
+  echo: false
+
+# Cache Configuration
+cache:
+  type: redis  # redis, memory
+  host: localhost
+  port: 6379
+  db: 0
+  ttl: 3600
+  max_size: 10000
+
+# API Configuration
+api:
+  host: 0.0.0.0
+  port: 8000
+  reload: false
+  workers: 4
+  cors_origins:
+    - http://localhost:3000
+    - http://localhost:8080
+  api_key_header: X-API-Key
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+
+# Web Dashboard Configuration
+dashboard:
+  enabled: true
+  port: 8080
+  auto_refresh: 5  # seconds
+  max_events_display: 1000
+  themes:
+    - dark
+    - light
+  default_theme: dark
+
+# Logging Configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: json  # json, text
+  output:
+    console: true
+    file: true
+    syslog: false
+  file:
+    path: logs/snort3-ai-ops.log
+    max_size: 100  # MB
+    backup_count: 10
+    rotation: daily
+  syslog:
+    host: localhost
+    port: 514
+    facility: local0
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    path: /metrics
+  healthcheck:
+    enabled: true
+    path: /health
+    interval: 30  # seconds
+  sentry:
+    enabled: false
+    dsn: ${SENTRY_DSN}
+    environment: production
+    traces_sample_rate: 0.1
+
+# Performance Configuration
+performance:
+  max_workers: 8
+  event_batch_size: 100
+  processing_timeout: 30  # seconds
+  queue_max_size: 10000
+  enable_profiling: false
+
+# Security Configuration
+security:
+  enable_authentication: true
+  jwt_secret: ${JWT_SECRET}
+  jwt_algorithm: HS256
+  access_token_expire_minutes: 60
+  enable_encryption: true
+  encryption_key: ${ENCRYPTION_KEY}
