@@ -919,7 +919,7 @@ This project is licensed under the GNU General Public License v2.0 - see the [LI
 - **Documentation**: [https://docs.snort3-ai-ops.io](https://docs.snort3-ai-ops.io)
 - **Issues**: [GitHub Issues](https://github.com/yourusername/snort3-ai-ops/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/snort3-ai-ops/discussions)
-- **Email**: support@snort3-ai-ops.io
+- **Email**: ssam3003@gmail.com
 
 ---
 
