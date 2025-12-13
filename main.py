@@ -8,6 +8,7 @@ import asyncio
 import signal
 import sys
 from pathlib import Path
+from datetime import datetime, UTC
 
 import click
 import structlog
@@ -155,12 +156,71 @@ def validate(config):
     type=click.Path(exists=True),
     help='Test input file'
 )
-def test_agent(agent, input):
+@click.option(
+    '--config',
+    '-c',
+    type=click.Path(exists=True),
+    default='config/config.yaml',
+    help='Path to configuration file'
+)
+def test_agent(agent, input, config):
     """Test a specific agent with sample data."""
     console.print(f"[cyan]Testing {agent} agent...[/cyan]")
     
-    # TODO: Implement agent testing
-    console.print("[yellow]Agent testing functionality coming soon[/yellow]")
+    try:
+        # Load configuration
+        cfg = load_config(config)
+        
+        # Create test event
+        test_event = {
+            'id': 'test-001',
+            'type': 'alert',
+            'timestamp': '2025-12-11T10:00:00Z',
+            'src_ip': '192.168.1.100',
+            'dst_ip': '10.0.0.50',
+            'signature': 'Test Signature',
+            'severity': 75
+        }
+        
+        # Initialize and test the agent
+        import asyncio
+        if agent == 'threat_intel':
+            from agents.threat_intelligence_agent import ThreatIntelligenceAgent
+            test_agent_obj = ThreatIntelligenceAgent(cfg.agents.threat_intelligence)
+            result = asyncio.run(test_agent_obj.enrich_event(test_event))
+            console.print("[green]✓ Threat Intelligence Agent test completed[/green]")
+            console.print(f"Result: {result}")
+        
+        elif agent == 'behavioral':
+            from agents.behavioral_analysis_agent import BehavioralAnalysisAgent
+            test_agent_obj = BehavioralAnalysisAgent(cfg.agents.behavioral_analysis)
+            result = asyncio.run(test_agent_obj.analyze_event(test_event))
+            console.print("[green]✓ Behavioral Analysis Agent test completed[/green]")
+            console.print(f"Result: {result}")
+        
+        elif agent == 'response':
+            from agents.response_orchestrator_agent import ResponseOrchestratorAgent
+            test_agent_obj = ResponseOrchestratorAgent(cfg.agents.response, dry_run=True)
+            asyncio.run(test_agent_obj.handle_event(test_event))
+            console.print("[green]✓ Response Orchestrator Agent test completed[/green]")
+        
+        elif agent == 'rule_optimizer':
+            from agents.rule_optimization_agent import RuleOptimizationAgent
+            test_agent_obj = RuleOptimizationAgent(cfg.agents.rule_optimization)
+            recommendations = asyncio.run(test_agent_obj.analyze_rules())
+            console.print("[green]✓ Rule Optimization Agent test completed[/green]")
+            console.print(f"Recommendations: {recommendations}")
+        
+        elif agent == 'report':
+            from agents.report_generation_agent import ReportGenerationAgent
+            test_agent_obj = ReportGenerationAgent(cfg.agents.report_generation)
+            report_path = asyncio.run(test_agent_obj.generate_daily_report())
+            console.print("[green]✓ Report Generation Agent test completed[/green]")
+            console.print(f"Report saved to: {report_path}")
+        
+    except Exception as e:
+        console.print(f"[red]✗ Agent test failed: {e}[/red]")
+        sys.exit(1)
 
 
 @cli.command()
@@ -171,12 +231,88 @@ def test_agent(agent, input):
     default='reports/status_report.html',
     help='Output file path'
 )
-def status(output):
+@click.option(
+    '--config',
+    '-c',
+    type=click.Path(exists=True),
+    default='config/config.yaml',
+    help='Path to configuration file'
+)
+def status(output, config):
     """Generate system status report."""
     console.print("[cyan]Generating status report...[/cyan]")
     
-    # TODO: Implement status reporting
-    console.print("[yellow]Status reporting functionality coming soon[/yellow]")
+    try:
+        from pathlib import Path
+        import json
+        from datetime import datetime
+        
+        # Load configuration
+        cfg = load_config(config)
+        
+        # Collect system status
+        status_data = {
+            'timestamp': datetime.now(UTC).isoformat(),
+            'config': {
+                'event_stream_endpoint': cfg.event_stream.endpoint,
+                'database': cfg.database.type,
+                'api_port': cfg.api.port
+            },
+            'agents': {}
+        }
+        
+        # Check which agents are enabled
+        if cfg.agents.threat_intelligence.enabled:
+            status_data['agents']['threat_intelligence'] = 'enabled'
+        if cfg.agents.behavioral_analysis.enabled:
+            status_data['agents']['behavioral_analysis'] = 'enabled'
+        if cfg.agents.response.enabled:
+            status_data['agents']['response'] = 'enabled'
+        if cfg.agents.rule_optimization.enabled:
+            status_data['agents']['rule_optimization'] = 'enabled'
+        if cfg.agents.report_generation.enabled:
+            status_data['agents']['report_generation'] = 'enabled'
+        
+        # Create output directory if needed
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Generate HTML report
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Snort3-AI-Ops Status Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        h1 {{ color: #333; }}
+        .status {{ background: #e8f5e9; padding: 20px; margin: 20px 0; border-left: 4px solid #4caf50; }}
+        .agent {{ background: #f5f5f5; padding: 10px; margin: 5px 0; }}
+        pre {{ background: #f5f5f5; padding: 10px; overflow-x: auto; }}
+    </style>
+</head>
+<body>
+    <h1>Snort3-AI-Ops Status Report</h1>
+    <p>Generated: {status_data['timestamp']}</p>
+    <div class="status">
+        <h2>Configuration</h2>
+        <pre>{json.dumps(status_data['config'], indent=2)}</pre>
+    </div>
+    <div class="status">
+        <h2>Enabled Agents</h2>
+        <pre>{json.dumps(status_data['agents'], indent=2)}</pre>
+    </div>
+</body>
+</html>"""
+        
+        with open(output_path, 'w') as f:
+            f.write(html_content)
+        
+        console.print(f"[green]✓ Status report generated: {output}[/green]")
+        console.print(f"  Enabled agents: {len(status_data['agents'])}")
+        
+    except Exception as e:
+        console.print(f"[red]✗ Status report generation failed: {e}[/red]")
+        sys.exit(1)
 
 
 @cli.command()
@@ -192,7 +328,14 @@ def status(output):
     '--hash',
     help='File hash to investigate'
 )
-def investigate(ip, domain, hash):
+@click.option(
+    '--config',
+    '-c',
+    type=click.Path(exists=True),
+    default='config/config.yaml',
+    help='Path to configuration file'
+)
+def investigate(ip, domain, hash, config):
     """Investigate an indicator."""
     if not any([ip, domain, hash]):
         console.print("[red]Error: Please provide an IP, domain, or hash to investigate[/red]")
@@ -200,8 +343,59 @@ def investigate(ip, domain, hash):
     
     console.print("[cyan]Starting investigation...[/cyan]")
     
-    # TODO: Implement investigation functionality
-    console.print("[yellow]Investigation functionality coming soon[/yellow]")
+    try:
+        import asyncio
+        from agents.threat_intelligence_agent import ThreatIntelligenceAgent
+        
+        # Load configuration
+        cfg = load_config(config)
+        
+        # Initialize threat intelligence agent
+        threat_intel = ThreatIntelligenceAgent(cfg.agents.threat_intelligence)
+        
+        # Determine IOC type and value
+        if ip:
+            ioc_type = 'ip'
+            ioc_value = ip
+        elif domain:
+            ioc_type = 'domain'
+            ioc_value = domain
+        else:
+            ioc_type = 'hash'
+            ioc_value = hash
+        
+        console.print(f"[cyan]Investigating {ioc_type}: {ioc_value}[/cyan]")
+        
+        # Lookup IOC
+        result = asyncio.run(threat_intel._lookup_ioc(ioc_value, ioc_type))
+        
+        # Display results
+        console.print("\n[bold]Investigation Results:[/bold]")
+        console.print(f"  IOC: {result.get('value')}")
+        console.print(f"  Type: {result.get('type')}")
+        console.print(f"  Threat Score: {result.get('threat_score')}/100")
+        console.print(f"  Malicious: {result.get('malicious')}")
+        
+        if result.get('sources'):
+            console.print(f"  Sources: {', '.join(result.get('sources', {}).keys())}")
+        
+        if result.get('tags'):
+            console.print(f"  Tags: {', '.join(result.get('tags', []))}")
+        
+        # Recommendations
+        console.print("\n[bold]Recommendations:[/bold]")
+        if result.get('threat_score', 0) >= 70:
+            console.print("  ⚠️  [red]HIGH RISK - Consider blocking this IOC[/red]")
+        elif result.get('threat_score', 0) >= 40:
+            console.print("  ⚡ [yellow]MEDIUM RISK - Monitor closely[/yellow]")
+        else:
+            console.print("  ✓ [green]LOW RISK - No immediate action required[/green]")
+        
+    except Exception as e:
+        console.print(f"[red]✗ Investigation failed: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == '__main__':

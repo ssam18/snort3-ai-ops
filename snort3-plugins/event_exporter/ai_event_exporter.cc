@@ -15,6 +15,8 @@
 #include "log/messages.h"
 #include "packet_io/active.h"
 #include "protocols/packet.h"
+#include "protocols/tcp.h"
+#include "protocols/udp.h"
 #include "pub_sub/intrinsic_event_ids.h"
 #include "time/packet_time.h"
 
@@ -174,8 +176,8 @@ void AIEventExporter::eval(Packet* p)
     if (!p)
         return;
 
-    // Export alerts
-    if (config->export_alerts && p->active && p->active->get_action() > Active::ACT_PASS)
+    // Export alerts - check if packet has alerts/events (any action beyond ALLOW)
+    if (config->export_alerts && p->active && p->active->get_action() > Active::ACT_ALLOW)
     {
         export_alert(p);
     }
@@ -209,14 +211,14 @@ string AIEventExporter::serialize_packet(Packet* p)
     
     if (p->type() == PktType::TCP && p->ptrs.tcph)
     {
-        j["src_port"] = p->ptrs.tcph->src_port();
-        j["dst_port"] = p->ptrs.tcph->dst_port();
+        j["src_port"] = ntohs(p->ptrs.tcph->th_sport);
+        j["dst_port"] = ntohs(p->ptrs.tcph->th_dport);
         j["tcp_flags"] = p->ptrs.tcph->th_flags;
     }
     else if (p->type() == PktType::UDP && p->ptrs.udph)
     {
-        j["src_port"] = p->ptrs.udph->src_port();
-        j["dst_port"] = p->ptrs.udph->dst_port();
+        j["src_port"] = ntohs(p->ptrs.udph->uh_sport);
+        j["dst_port"] = ntohs(p->ptrs.udph->uh_dport);
     }
     
     j["packet_length"] = p->pktlen;

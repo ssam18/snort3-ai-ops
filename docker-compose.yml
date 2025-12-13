@@ -1,136 +1,145 @@
-version: '3.8'
+# Snort3-AI-Ops Production Docker Compose
+# Complete stack with all 5 agents, API server, and supporting services
 
 services:
-  # Snort3 IPS
-  snort3:
-    image: snort3/snort3:latest
-    container_name: snort3-ips
-    networks:
-      - ai-ops-network
-    volumes:
-      - ./snort3-plugins/event_exporter/build:/plugins
-      - ./config/snort.lua:/etc/snort/snort.lua:ro
-      - ./pcaps:/pcaps:ro
-    environment:
-      - SNORT_PLUGIN_PATH=/plugins
-    command: >
-      snort --plugin-path /plugins
-            -c /etc/snort/snort.lua
-            -r /pcaps/test.pcap
-            -A alert_fast
-    depends_on:
-      - zeromq-broker
-
-  # ZeroMQ Message Broker
-  zeromq-broker:
-    image: eclipse-mosquitto:latest
-    container_name: zeromq-broker
-    networks:
-      - ai-ops-network
-    ports:
-      - "5555:5555"
-
-  # AI-Ops Engine
-  ai-ops-engine:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    container_name: snort3-ai-ops
-    networks:
-      - ai-ops-network
-    ports:
-      - "8000:8000"  # API
-      - "8080:8080"  # Dashboard
-      - "9090:9090"  # Prometheus metrics
-    volumes:
-      - ./config:/app/config:ro
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
-      - ./reports:/app/reports
-    environment:
-      - SNORT3_AIOPS_CONFIG=/app/config/config.yaml
-      - PYTHONUNBUFFERED=1
-      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
-      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
-      - OTX_API_KEY=${OTX_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    depends_on:
-      - zeromq-broker
-      - redis
-      - postgres
-    restart: unless-stopped
-
-  # Redis Cache
+  # Redis - for caching and pub/sub messaging
   redis:
     image: redis:7-alpine
-    container_name: ai-ops-redis
-    networks:
-      - ai-ops-network
+    container_name: snort3-redis
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - snort-ai-ops
 
-  # PostgreSQL Database
+  # PostgreSQL - for persistent storage
   postgres:
     image: postgres:15-alpine
-    container_name: ai-ops-postgres
-    networks:
-      - ai-ops-network
+    container_name: snort3-postgres
+    environment:
+      POSTGRES_DB: aiops
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD: aiops_password
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_USER=aiops
-      - POSTGRES_PASSWORD=aiops_password
-      - POSTGRES_DB=snort3_aiops
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  # Prometheus (Monitoring)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ai-ops-prometheus
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     networks:
-      - ai-ops-network
-    ports:
-      - "9091:9090"
-    volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    restart: unless-stopped
+      - snort-ai-ops
 
-  # Grafana (Visualization)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ai-ops-grafana
-    networks:
-      - ai-ops-network
-    ports:
-      - "3000:3000"
+  # AI-Ops Engine with all 5 agents
+  aiops-engine:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: snort3-aiops-engine
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://aiops:aiops_password@postgres:5432/aiops
+      - ZMQ_ENDPOINT=tcp://0.0.0.0:5555
+      - LOG_LEVEL=INFO
+      - ENABLE_ALL_AGENTS=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-demo-key-for-testing}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY:-demo_key}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY:-demo_key}
+    ports:
+      - "5555:5555"  # ZeroMQ event stream
+      - "9090:9090"  # Metrics
     volumes:
-      - grafana-data:/var/lib/grafana
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config:/app/config
+      - ./core:/app/core
+      - ./agents:/app/agents
+      - ./main.py:/app/main.py
+      - ./examples:/app/examples
+      - aiops-data:/app/data
+      - aiops-logs:/app/logs
+    command: python main.py start --config config/config.yaml
     depends_on:
-      - prometheus
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import zmq; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - snort-ai-ops
     restart: unless-stopped
+
+  # API Server and Dashboard
+  api-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: snort3-api-server
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://aiops:aiops_password@postgres:5432/aiops
+      - ENGINE_ENDPOINT=tcp://aiops-engine:5555
+      - HOST=0.0.0.0
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./api_server.py:/app/api_server.py
+      - ./core:/app/core
+    command: python api_server.py
+    depends_on:
+      - redis
+      - postgres
+      - aiops-engine
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - snort-ai-ops
+    restart: unless-stopped
+
+  # Event Simulator - generates test events
+  event-simulator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: snort3-event-simulator
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ZMQ_ENDPOINT=tcp://aiops-engine:5555
+      - EVENTS_PER_SECOND=10
+    volumes:
+      - ./examples:/app/examples
+    command: python examples/apt_detection_demo.py
+    depends_on:
+      - aiops-engine
+    networks:
+      - snort-ai-ops
+    restart: unless-stopped
+    profiles:
+      - demo  # Only start with --profile demo
 
 networks:
-  ai-ops-network:
+  snort-ai-ops:
     driver: bridge
 
 volumes:
   redis-data:
   postgres-data:
-  prometheus-data:
-  grafana-data:
+  aiops-data:
+  aiops-logs:

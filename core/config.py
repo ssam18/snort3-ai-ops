@@ -40,7 +40,19 @@ class ResponseConfig(BaseModel):
     auto_response: bool = False
     response_delay: int = 0
     max_concurrent_actions: int = 10
-    severity_thresholds: Dict[str, int] = Field(default_factory=dict)
+    severity_thresholds: Dict[str, int] = Field(default_factory=lambda: {
+        'critical': 90,
+        'high': 75,
+        'medium': 50,
+        'low': 25
+    })
+    actions: Dict[str, Any] = Field(default_factory=lambda: {
+        'block_ip': {'enabled': True, 'default_duration': 3600},
+        'create_ticket': {'enabled': True},
+        'notify_admin': {'enabled': True},
+        'update_firewall': {'enabled': False},
+        'log_only': {'enabled': True}
+    })
 
 
 class RuleOptimizationConfig(BaseModel):
