@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Snort3-AI-Ops Status Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        .status { background: #e8f5e9; padding: 20px; margin: 20px 0; border-left: 4px solid #4caf50; }
+        .agent { background: #f5f5f5; padding: 10px; margin: 5px 0; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Snort3-AI-Ops Status Report</h1>
+    <p>Generated: 2025-12-11T20:33:33.463072</p>
+    <div class="status">
+        <h2>Configuration</h2>
+        <pre>{
+  "event_stream_endpoint": "tcp://127.0.0.1:5555",
+  "database": "sqlite",
+  "api_port": 8000
+}</pre>
+    </div>
+    <div class="status">
+        <h2>Enabled Agents</h2>
+        <pre>{
+  "threat_intelligence": "enabled",
+  "behavioral_analysis": "enabled",
+  "response": "enabled",
+  "rule_optimization": "enabled",
+  "report_generation": "enabled"
+}</pre>
+    </div>
+</body>
+</html>

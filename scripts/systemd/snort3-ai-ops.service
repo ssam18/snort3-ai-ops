@@ -1,0 +1,36 @@
+[Unit]
+Description=Snort3-AI-Ops Engine
+After=network.target snort3.service
+Wants=snort3.service
+
+[Service]
+Type=simple
+User=aiops
+Group=aiops
+WorkingDirectory=/opt/snort3-ai-ops
+Environment="PATH=/opt/snort3-ai-ops/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/snort3-ai-ops/.env
+ExecStart=/opt/snort3-ai-ops/venv/bin/python main.py start
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=snort3-ai-ops
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/snort3-ai-ops/data /opt/snort3-ai-ops/logs /opt/snort3-ai-ops/reports
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
