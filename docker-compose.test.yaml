@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Redis for caching and message queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: aiops_test
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD: testpassword
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Snort3 AI-Ops application
+  aiops:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://aiops:testpassword@postgres:5432/aiops_test
+      - ZEROMQ_ENDPOINT=tcp://0.0.0.0:5555
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8080:8080"
+      - "5555:5555"
+      - "9090:9090"
+    volumes:
+      - ./tests:/app/tests
+      - ./data:/app/data
+    command: python api_server.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Test runner
+  test-runner:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      aiops:
+        condition: service_healthy
+    environment:
+      - API_URL=http://aiops:8080
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://aiops:testpassword@postgres:5432/aiops_test
+    volumes:
+      - ./tests:/app/tests
+      - ./test-results:/app/test-results
+    command: pytest tests/integration/ -v --junitxml=/app/test-results/results.xml

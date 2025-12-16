@@ -1,0 +1,38 @@
+# Prometheus Configuration for Snort3-AI-Ops
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'snort3-ai-ops'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Scrape configurations
+scrape_configs:
+  # Snort3-AI-Ops metrics
+  - job_name: 'ai-ops-engine'
+    static_configs:
+      - targets: ['ai-ops-engine:9090']
+        labels:
+          instance: 'ai-ops-main'
+    metrics_path: '/metrics'
+
+  # Node exporter (if available)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+
+  # PostgreSQL exporter (if available)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:9187']
+
+  # Redis exporter (if available)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']
